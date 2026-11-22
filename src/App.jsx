@@ -1,7 +1,8 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { api } from './api.js';
-import Landing from './pages/Landing.jsx';
+import AppHeader from './components/ui/AppHeader.jsx';
+import LandingPage from './pages/landing/LandingPage.jsx';
 import Auth from './pages/Auth.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import EventEditor from './pages/EventEditor.jsx';
@@ -29,23 +30,7 @@ function AppShell({ children }) {
   };
   return (
     <div className="app">
-      <header className="topbar">
-        <Link to={user ? '/dashboard' : '/'} className="brand">Gather</Link>
-        <nav>
-          {user ? (
-            <>
-              <Link to="/dashboard">My events</Link>
-              <Link to="/events/new" className="btn btn-sm">New event</Link>
-              <button className="link" onClick={logout}>Sign out</button>
-            </>
-          ) : (
-            <>
-              <Link to="/login">Sign in</Link>
-              <Link to="/signup" className="btn btn-sm">Get started</Link>
-            </>
-          )}
-        </nav>
-      </header>
+      <AppHeader user={user} onLogout={logout} />
       <main>{children}</main>
     </div>
   );
@@ -65,7 +50,7 @@ export default function App() {
   return (
     <AuthCtx.Provider value={{ user, setUser, loading }}>
       <Routes>
-        <Route path="/" element={shell(<Landing />)} />
+        <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={shell(<Auth mode="login" />)} />
         <Route path="/signup" element={shell(<Auth mode="signup" />)} />
         <Route path="/dashboard" element={priv(<Dashboard />)} />

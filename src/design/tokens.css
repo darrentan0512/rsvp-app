@@ -1,0 +1,15 @@
+/* Gather design tokens, shared by every page (taken from the :root block in design/*.html). */
+:root {
+  --bg: #F5F3EE; --surface: #FFFFFF; --ink: #17161B; --muted: #4A4852; --subtle: #5C5A63;
+  --line: #E4E0D7; --field-border: #D9D4C8; --line-strong: #CFC9BC; --dashed: #B9B2A3; --track: #EDEAE3;
+  --accent: #C23B1F; --accent-tint: #F6DDD5; --accent-ink: #8A2A15;
+  --green: #1E4D3B; --green-tint: #DDEADF; --green-wash: #EEF4F0;
+  --gold: #D9A441; --gold-tint: #F3E6C4; --gold-ink: #6B4A08;
+  --lilac: #5B5FC7; --lilac-tint: #E2E1F0; --lilac-ink: #34378A;
+  --font-display: 'Bricolage Grotesque', sans-serif;
+  --font-body: Inter, system-ui, sans-serif;
+
+  /* The older pages (event management, sign in) read these; point them at the same palette. */
+  --app-bg: var(--bg); --app-surface: var(--surface); --app-ink: var(--ink); --app-muted: var(--subtle);
+  --app-line: var(--line); --app-accent: var(--accent); --app-accent-ink: #fff; --app-danger: #B42318;
+}

@@ -2,6 +2,12 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { EVENT_TYPES, THEMES } from '../../shared/eventTypes.js';
+import Button from '../components/ui/Button.jsx';
+import ChoiceCard, { ChoiceGroup } from '../components/ui/ChoiceCard.jsx';
+import { CheckField, DateField, InfoNote, Input, Select, SelectBox, TextArea, TextField } from '../components/ui/Field.jsx';
+import SectionCard from '../components/ui/SectionCard.jsx';
+import { ArrowLeftIcon, ArrowRightIcon, CloseIcon, PlusIcon } from '../components/ui/icons.jsx';
+import { TYPE_PICKER_LABELS, TYPE_TONES } from '../components/ui/constants.js';
 
 const blankFor = (type) => {
   const t = EVENT_TYPES[type];
@@ -25,6 +31,13 @@ const blankFor = (type) => {
   };
 };
 
+const RSVP_MODES = [
+  ['open', 'Anyone with the link', 'Share one link anywhere: group chats, social media.'],
+  ['invite_only', 'Guest list only', 'Only people on your guest list can RSVP, using their personal link or by finding their name.'],
+];
+
+const BackLink = ({ to, children }) => <Link to={to} className="ui-back"><ArrowLeftIcon />{children}</Link>;
+
 export default function EventEditor() {
   const { id } = useParams();
   const [params] = useSearchParams();
@@ -43,22 +56,25 @@ export default function EventEditor() {
     }).catch((e) => setError(e.message));
   }, [id, isEdit]);
 
+  const typeChoices = (onPick, current) => (
+    <ChoiceGroup legend="What are you planning?" variant="chip">
+      {Object.entries(EVENT_TYPES).map(([k, t]) => (
+        <ChoiceCard key={k} tone={TYPE_TONES[k]} title={TYPE_PICKER_LABELS[k] || t.label} selected={current === k} onSelect={() => onPick(k)} />
+      ))}
+    </ChoiceGroup>
+  );
+
   // Step 1 (new events only): choose what's being celebrated.
   if (!form) {
-    if (isEdit) return <div className="page-pad">{error ? <p className="error">{error}</p> : <p className="muted">Loading…</p>}</div>;
+    if (isEdit) return <div className="ui-page ui-page--form">{error ? <p className="ui-error">{error}</p> : <p className="ui-empty">Loading…</p>}</div>;
     return (
-      <div className="page-pad narrow">
-        <h1>What are you celebrating?</h1>
-        <p className="muted">We'll set up a theme and RSVP questions to match. You can change everything later.</p>
-        <div className="type-choose">
-          {Object.entries(EVENT_TYPES).map(([k, t]) => (
-            <button key={k} className="card type-option" onClick={() => setForm(blankFor(k))}>
-              <span className="type-emoji">{t.emoji}</span>
-              <b>{t.label}</b>
-              <span className="muted small">{t.blurb}</span>
-            </button>
-          ))}
+      <div className="ui-page ui-page--form">
+        <BackLink to="/dashboard">Back to my events</BackLink>
+        <div className="ui-titleblock">
+          <h1>What are you celebrating?</h1>
+          <p className="ui-titlelead">We'll set up a theme and RSVP questions to match. You can change everything later.</p>
         </div>
+        {typeChoices((k) => setForm(blankFor(k)), null)}
       </div>
     );
   }
@@ -67,6 +83,7 @@ export default function EventEditor() {
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
   const updateList = (key, i, patch) => setForm({ ...form, [key]: form[key].map((x, j) => (j === i ? { ...x, ...patch } : x)) });
   const removeFrom = (key, i) => setForm({ ...form, [key]: form[key].filter((_, j) => j !== i) });
+  const setOptions = (i, fn) => updateList('questions', i, { options: fn(form.questions[i].options || []) });
 
   const save = async (e) => {
     e.preventDefault();
@@ -81,125 +98,119 @@ export default function EventEditor() {
     }
   };
 
+  const cancelTo = isEdit ? `/events/${id}` : '/dashboard';
+
   return (
-    <form className="page-pad narrow editor" onSubmit={save}>
-      <div className="page-head">
-        <div>
-          <p className="muted small">{t.emoji} {t.label}</p>
-          <h1>{isEdit ? 'Edit event' : 'New event'}</h1>
-        </div>
-        <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} aria-label="Event type">
-          {Object.entries(EVENT_TYPES).map(([k, x]) => <option key={k} value={k}>{x.emoji} {x.label}</option>)}
-        </select>
+    <form className="ui-page ui-page--form" onSubmit={save}>
+      <BackLink to={cancelTo}>{isEdit ? 'Back to event' : 'Back to my events'}</BackLink>
+      <div className="ui-titleblock">
+        <h1>{isEdit ? 'Edit event' : 'New event'}</h1>
+        <p className="ui-titlelead">Fill in the details. You can change any of this later.</p>
       </div>
 
-      <section className="card">
-        <h2>The basics</h2>
-        <label>Event name<input value={form.title} onChange={set('title')} placeholder={t.titlePlaceholder} required /></label>
-        <label>{t.hostsLabel}<input value={form.hosts} onChange={set('hosts')} placeholder={form.type === 'wedding' ? 'Alex Tan & Sam Lee' : 'Your name(s)'} /></label>
-        <label>Welcome message<textarea rows={4} value={form.description} onChange={set('description')} placeholder="Tell guests what to expect, dress code, parking, gifts…" /></label>
-      </section>
+      {typeChoices((k) => setForm({ ...form, type: k }), form.type)}
 
-      <section className="card">
-        <h2>When & where</h2>
-        <div className="row">
-          <label>Starts<input type="datetime-local" value={form.starts_at} onChange={set('starts_at')} /></label>
-          <label>Ends<input type="datetime-local" value={form.ends_at} onChange={set('ends_at')} /></label>
+      <SectionCard number={1} title="The basics">
+        <TextField label="Event name" value={form.title} onChange={set('title')} placeholder={t.titlePlaceholder} required />
+        <TextField label={t.hostsLabel} value={form.hosts} onChange={set('hosts')} placeholder={form.type === 'wedding' ? 'Alex Tan & Sam Lee' : 'Your name(s)'} />
+        <TextArea label="Welcome message" rows={4} value={form.description} onChange={set('description')} placeholder="Tell guests what to expect: dress code, parking, gifts..." />
+      </SectionCard>
+
+      <SectionCard number={2} title="When and where">
+        <div className="ui-grid2">
+          <DateField type="datetime-local" label="Starts" value={form.starts_at} onChange={set('starts_at')} />
+          <DateField type="datetime-local" label="Ends" value={form.ends_at} onChange={set('ends_at')} />
         </div>
-        <label>Venue<input value={form.venue} onChange={set('venue')} placeholder="The Garden Pavilion" /></label>
-        <label>Address<input value={form.address} onChange={set('address')} placeholder="Street, city" /></label>
-      </section>
+        <TextField label="Venue" value={form.venue} onChange={set('venue')} placeholder="The Garden Pavilion" />
+        <TextField label="Address" value={form.address} onChange={set('address')} placeholder="Street, city" />
+      </SectionCard>
 
-      <section className="card">
-        <h2>Schedule <span className="muted small">(optional)</span></h2>
-        {form.schedule.map((s, i) => (
-          <div className="row list-row" key={i}>
-            <input type="time" value={s.time} onChange={(e) => updateList('schedule', i, { time: e.target.value })} style={{ maxWidth: 130 }} />
-            <input value={s.title} onChange={(e) => updateList('schedule', i, { title: e.target.value })} placeholder="What's happening" />
-            <button type="button" className="icon-btn" onClick={() => removeFrom('schedule', i)} aria-label="Remove">✕</button>
-          </div>
-        ))}
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setForm({ ...form, schedule: [...form.schedule, { time: '', title: '' }] })}>+ Add item</button>
-      </section>
-
-      <section className="card">
-        <h2>RSVP settings</h2>
-        <div className="mode-choose">
-          {[
-            ['open', 'Anyone with the link', 'Share one link anywhere — group chats, social media.'],
-            ['invite_only', 'Guest list only', 'Only people on your guest list can RSVP, using their personal link or by finding their name.'],
-          ].map(([v, title, desc]) => (
-            <label key={v} className={`mode-option ${form.rsvp_mode === v ? 'selected' : ''}`}>
-              <input type="radio" name="rsvp_mode" value={v} checked={form.rsvp_mode === v} onChange={set('rsvp_mode')} />
-              <span><b>{title}</b><span className="muted small">{desc}</span></span>
-            </label>
+      <SectionCard number={3} title="Schedule" optional>
+        <div className="ui-rows">
+          {form.schedule.map((s, i) => (
+            <div className="ui-row" key={i}>
+              <Input type="time" className="ui-input--time" aria-label="Time" value={s.time} onChange={(e) => updateList('schedule', i, { time: e.target.value })} />
+              <Input aria-label="Schedule item" value={s.title} onChange={(e) => updateList('schedule', i, { title: e.target.value })} placeholder="What's happening" />
+              <button type="button" className="ui-iconbtn" onClick={() => removeFrom('schedule', i)} aria-label="Remove item"><CloseIcon /></button>
+            </div>
           ))}
         </div>
-        <div className="row">
-          <label>RSVP by<input type="date" value={form.rsvp_deadline} onChange={set('rsvp_deadline')} /></label>
-          <label>Automatic reminder
-            <select value={form.auto_remind_days} onChange={set('auto_remind_days')} disabled={!form.rsvp_deadline}>
-              <option value={0}>Off</option>
-              <option value={3}>3 days before deadline</option>
-              <option value={7}>1 week before deadline</option>
-              <option value={14}>2 weeks before deadline</option>
-            </select>
-          </label>
+        <Button variant="dashed" icon={<PlusIcon />} onClick={() => setForm({ ...form, schedule: [...form.schedule, { time: '', title: '' }] })}>Add item</Button>
+      </SectionCard>
+
+      <SectionCard number={4} title="RSVP settings">
+        <ChoiceGroup legend="Who can reply?" variant="radio">
+          {RSVP_MODES.map(([v, title, desc]) => (
+            <ChoiceCard key={v} variant="radio" title={title} description={desc} selected={form.rsvp_mode === v} onSelect={() => setForm({ ...form, rsvp_mode: v })} />
+          ))}
+        </ChoiceGroup>
+        <div className="ui-grid2">
+          <DateField label="RSVP by" value={form.rsvp_deadline} onChange={set('rsvp_deadline')} />
+          <Select label="Automatic reminder" value={form.auto_remind_days} onChange={set('auto_remind_days')} disabled={!form.rsvp_deadline}>
+            <option value={0}>Off</option>
+            <option value={3}>3 days before RSVP date</option>
+            <option value={7}>1 week before RSVP date</option>
+            <option value={14}>2 weeks before RSVP date</option>
+          </Select>
         </div>
         {!!Number(form.auto_remind_days) && form.rsvp_deadline && (
-          <p className="muted small">Guests on your guest list with an email who haven't replied get one reminder email automatically.</p>
+          <InfoNote>Guests on your guest list with an email who haven't replied get one reminder email automatically.</InfoNote>
         )}
         {form.rsvp_mode === 'invite_only' ? (
-          <p className="muted small">Each invite on your guest list has its own number of seats — add “+1” when adding a guest to give them a plus-one.</p>
+          <InfoNote>Each invite on your guest list has its own number of seats. Add "+1" when adding a guest to give them a plus-one.</InfoNote>
         ) : (
-          <label className="check"><input type="checkbox" checked={form.allow_plus_ones} onChange={set('allow_plus_ones')} /> Guests can bring others</label>
+          <CheckField checked={form.allow_plus_ones} onChange={set('allow_plus_ones')}>Guests can bring others</CheckField>
         )}
         {form.rsvp_mode !== 'invite_only' && form.allow_plus_ones && (
-          <label>Max people per RSVP<input type="number" min={1} max={20} value={form.max_party_size} onChange={set('max_party_size')} style={{ maxWidth: 120 }} /></label>
+          <TextField label="Max people per RSVP" type="number" min={1} max={20} value={form.max_party_size} onChange={set('max_party_size')} className="ui-input--narrow" />
         )}
-      </section>
+      </SectionCard>
 
-      <section className="card">
-        <h2>Questions for guests</h2>
-        <p className="muted small">Asked only to guests who are attending.</p>
-        {form.questions.map((q, i) => (
-          <div className="question-edit" key={q.id || i}>
-            <div className="row">
-              <input value={q.label} onChange={(e) => updateList('questions', i, { label: e.target.value })} placeholder="Question" />
-              <select value={q.kind} onChange={(e) => updateList('questions', i, { kind: e.target.value, options: q.options || ['Option 1', 'Option 2'] })} style={{ maxWidth: 150 }}>
-                <option value="text">Free text</option>
-                <option value="choice">Multiple choice</option>
-              </select>
-              <button type="button" className="icon-btn" onClick={() => removeFrom('questions', i)} aria-label="Remove question">✕</button>
+      <SectionCard number={5} title="Questions for guests" description="Only asked to guests who are attending.">
+        <div className="ui-rows">
+          {form.questions.map((q, i) => (
+            <div className="ui-qcard" key={q.id || i}>
+              <div className="ui-qcard__top">
+                <Input aria-label="Question" value={q.label} onChange={(e) => updateList('questions', i, { label: e.target.value })} placeholder="Question" />
+                <SelectBox aria-label="Answer type" value={q.kind} onChange={(e) => updateList('questions', i, { kind: e.target.value, options: q.options || ['Option 1', 'Option 2'] })}>
+                  <option value="text">Free text</option>
+                  <option value="choice">Multiple choice</option>
+                </SelectBox>
+                <button type="button" className="ui-iconbtn" onClick={() => removeFrom('questions', i)} aria-label="Remove question"><CloseIcon /></button>
+              </div>
+              {q.kind === 'choice' && (
+                <div className="ui-chips">
+                  {(q.options || []).map((o, j) => (
+                    <span className="ui-chip" key={j}>
+                      <input aria-label={`Option ${j + 1}`} size={Math.max(o.length, 6)} value={o} placeholder="Option"
+                        onChange={(e) => setOptions(i, (opts) => opts.map((x, k) => (k === j ? e.target.value : x)))} />
+                      <button type="button" aria-label={`Remove option ${j + 1}`} onClick={() => setOptions(i, (opts) => opts.filter((_, k) => k !== j))}><CloseIcon size={14} /></button>
+                    </span>
+                  ))}
+                  <Button variant="dashed" size="sm" className="ui-btn--chipadd" onClick={() => setOptions(i, (opts) => [...opts, ''])}>+ Option</Button>
+                </div>
+              )}
+              {(form.allow_plus_ones || form.rsvp_mode === 'invite_only') && (
+                <CheckField checked={!!q.perGuest} onChange={(e) => updateList('questions', i, { perGuest: e.target.checked })}>Ask each guest in the party</CheckField>
+              )}
             </div>
-            {q.kind === 'choice' && (
-              <input value={(q.options || []).join(', ')} onChange={(e) => updateList('questions', i, { options: e.target.value.split(',').map((s) => s.trimStart()) })} placeholder="Options, separated by commas" />
-            )}
-            {(form.allow_plus_ones || form.rsvp_mode === 'invite_only') && (
-              <label className="check small"><input type="checkbox" checked={!!q.perGuest} onChange={(e) => updateList('questions', i, { perGuest: e.target.checked })} /> Ask each guest in the party</label>
-            )}
-          </div>
-        ))}
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setForm({ ...form, questions: [...form.questions, { id: '', label: '', kind: 'text' }] })}>+ Add question</button>
-      </section>
-
-      <section className="card">
-        <h2>Theme</h2>
-        <div className="theme-grid">
-          {Object.entries(THEMES).map(([k, th]) => (
-            <button type="button" key={k} className={`theme-swatch ${form.theme === k ? 'selected' : ''}`} onClick={() => setForm({ ...form, theme: k })}
-              style={{ background: th.bg, color: th.heroInk || th.ink, fontFamily: th.font }}>
-              <span className="dot" style={{ background: th.accent }} />
-              {th.label}
-            </button>
           ))}
         </div>
-      </section>
+        <Button variant="dashed" icon={<PlusIcon />} onClick={() => setForm({ ...form, questions: [...form.questions, { id: '', label: '', kind: 'text' }] })}>Add question</Button>
+      </SectionCard>
 
-      {error && <p className="error">{error}</p>}
-      <div className="form-actions">
-        <Link to={isEdit ? `/events/${id}` : '/dashboard'} className="btn btn-ghost">Cancel</Link>
-        <button className="btn" disabled={busy}>{busy ? 'Saving…' : isEdit ? 'Save changes' : 'Create event'}</button>
+      <SectionCard number={6} title="Theme">
+        <ChoiceGroup legend="Theme" variant="swatch" hideLegend>
+          {Object.entries(THEMES).map(([k, th]) => (
+            <ChoiceCard key={k} variant="swatch" swatch={k} title={th.label} selected={form.theme === k} onSelect={() => setForm({ ...form, theme: k })} />
+          ))}
+        </ChoiceGroup>
+      </SectionCard>
+
+      {error && <p className="ui-error" role="alert">{error}</p>}
+      <div className="ui-formactions">
+        <Button to={cancelTo} variant="secondary">Cancel</Button>
+        <Button type="submit" disabled={busy} iconAfter={<ArrowRightIcon size={18} strokeWidth={2.2} />}>{busy ? 'Saving…' : isEdit ? 'Save changes' : 'Create event'}</Button>
       </div>
     </form>
   );
