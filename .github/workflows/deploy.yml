@@ -1,0 +1,84 @@
+# Builds and tests every push and pull request, then deploys to Vercel:
+#   push to main      -> production deployment
+#   pull request      -> preview deployment (URL in the run summary)
+# Required repository secrets: VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID.
+# App secrets (TURSO_*, RESEND_API_KEY, EMAIL_FROM, APP_URL, CRON_SECRET) live in the
+# Vercel project's Environment Variables and are pulled in by `vercel pull`.
+name: Deploy to Vercel
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+  VERCEL_CLI: vercel@65.12.1
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build frontend
+        run: npm run build
+      - name: Smoke test API (local SQLite file)
+        env:
+          DB_PATH: ${{ runner.temp }}/ci.db
+          API_PORT: 3001
+        run: |
+          node server/index.js & SERVER=$!
+          for i in $(seq 1 20); do curl -sf http://localhost:3001/api/auth/me && break; sleep 0.5; done
+          curl -sf -c jar -H 'Content-Type: application/json' \
+            -d '{"name":"CI","email":"ci@example.test","password":"ci-password-123"}' http://localhost:3001/api/auth/signup
+          curl -sf -b jar -H 'Content-Type: application/json' \
+            -d '{"type":"birthday","title":"CI party"}' http://localhost:3001/api/events
+          curl -sf -b jar http://localhost:3001/api/events | grep -q 'CI party'
+          kill $SERVER
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    # Secrets aren't available to pull requests from forks, so only deploy our own branches.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    environment:
+      name: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'production' || 'preview' }}
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Choose target
+        id: target
+        run: |
+          if [ "$GITHUB_REF" = "refs/heads/main" ] && [ "$GITHUB_EVENT_NAME" != "pull_request" ]; then
+            echo "env=production" >> "$GITHUB_OUTPUT"; echo "flag=--prod" >> "$GITHUB_OUTPUT"
+          else
+            echo "env=preview" >> "$GITHUB_OUTPUT"; echo "flag=" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Pull Vercel project settings
+        run: npx --yes $VERCEL_CLI pull --yes --environment=${{ steps.target.outputs.env }} --token=${{ secrets.VERCEL_TOKEN }}
+      - name: Build
+        run: npx --yes $VERCEL_CLI build ${{ steps.target.outputs.flag }} --token=${{ secrets.VERCEL_TOKEN }}
+      - name: Deploy
+        id: deploy
+        run: |
+          url=$(npx --yes $VERCEL_CLI deploy --prebuilt ${{ steps.target.outputs.flag }} --token=${{ secrets.VERCEL_TOKEN }})
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "### Deployed to ${{ steps.target.outputs.env }}: $url" >> "$GITHUB_STEP_SUMMARY"
